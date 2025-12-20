@@ -18,23 +18,18 @@ MapTokenizer::MapTokenizer() {
 // TODO: make sure to handle eof or end of input etc
 std::vector<int> MapTokenizer::tokenize(std::string& input) {
     std::vector<int> tokens;
-    int start = 0;
-    int end = 0;
-    std::string substr = "";
-
-    // load in token table as an enormous map
-    std::ifstream ifs;
-    ifs.open ("resources/cl100k_base.tiktoken", std::ifstream::in);
-    char c;
-    while (ifs.good()) {
-        std::cout << c;
-        c = ifs.get();
-    }
-
-  ifs.close();
+    int substr_size = 0;
+    std::string_view substr;
 
     for (int i = 0; i < input.size(); i++) {
-        // if (substr !=)
+        substr_size++;
+        substr = std::string_view(input.c_str(), substr_size);
+        /*
+        TODO: convert input to base64 encoded string.
+        */
+        if (!this->token_map.contains(substr)) {
+
+        }
     }
     return tokens;
 }

@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.16)
 
 project(tinyLLM LANGUAGES CXX)
 
-# Use C++17
-set(CMAKE_CXX_STANDARD 17)
+# Use C++20
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -37,8 +37,7 @@ add_custom_target(run
     USES_TERMINAL
 )
 
-# Debug logging
-# cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
-target_compile_definitions(tinyLLM PRIVATE
-    $<$<CONFIG:Debug>:TINYLLM_DEBUG>
-)
+# Debug build, enable logging 
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_definitions(tinyLLM PRIVATE TINYLLM_DEBUG)
+endif()

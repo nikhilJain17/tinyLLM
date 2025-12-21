@@ -1,13 +1,22 @@
 # tinyLLM
 Yet another LLM inference engine
 
-## Building
+## Build
 mkdir -p build
-cmake -S . -B build
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 
-## Run directly
+## Build debug
+mkdir -p build
+cmake -S . -B build-debug -DCMAKE_BUILD_TYPE=Debug
+cmake --build build-debug
+
+## Run binary 
 ./build/bin/tinyLLM
 
-## Or using the CMake run target
+### Or run via the CMake run target
 cmake --build build --target run
+
+### For running debug
+cmake --build build-debug --target run
+

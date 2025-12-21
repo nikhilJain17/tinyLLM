@@ -1,7 +1,12 @@
 #include <iostream>
-#include "tokenizer/map_tokenizer.hpp"
-
+#include "tokenizer/greedy_tokenizer.hpp"
+#include "tokenizer/base64.hpp"
 int main() {
-    MapTokenizer m;
+    GreedyTokenizer m;
+    std::string f = "Hello world";
+    for (int token : m.tokenize(f)) {
+        std::cout << " " << token;
+    }
+    std::cout << "\n";
     return 0;
 }

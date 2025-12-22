@@ -1,0 +1,25 @@
+[tinyLLM] greedy_tokenizer.cpp:14 Loaded 100256 tokens into tokenizer.
+[tinyLLM] greedy_tokenizer.cpp:27 0 + 1 < 11
+[tinyLLM] greedy_tokenizer.cpp:27 0 + 2 < 11
+[tinyLLM] greedy_tokenizer.cpp:27 0 + 3 < 11
+[tinyLLM] greedy_tokenizer.cpp:27 0 + 4 < 11
+[tinyLLM] greedy_tokenizer.cpp:27 0 + 5 < 11
+[tinyLLM] greedy_tokenizer.cpp:27 0 + 6 < 11
+[tinyLLM] greedy_tokenizer.cpp:27 0 + 7 < 11
+[tinyLLM] greedy_tokenizer.cpp:27 0 + 8 < 11
+[tinyLLM] greedy_tokenizer.cpp:27 0 + 9 < 11
+[tinyLLM] greedy_tokenizer.cpp:27 0 + 10 < 11
+[tinyLLM] greedy_tokenizer.cpp:41 Pushed back Hello, SGVsbG8=, 9906
+[tinyLLM] greedy_tokenizer.cpp:44 Pos at 5, size of input: 11
+[tinyLLM] greedy_tokenizer.cpp:27 5 + 1 < 11
+[tinyLLM] greedy_tokenizer.cpp:27 5 + 2 < 11
+[tinyLLM] greedy_tokenizer.cpp:27 5 + 3 < 11
+[tinyLLM] greedy_tokenizer.cpp:27 5 + 4 < 11
+[tinyLLM] greedy_tokenizer.cpp:27 5 + 5 < 11
+[tinyLLM] greedy_tokenizer.cpp:27 5 + 6 < 11
+[tinyLLM] greedy_tokenizer.cpp:27 5 + 7 < 11
+[tinyLLM] greedy_tokenizer.cpp:27 5 + 8 < 11
+[tinyLLM] greedy_tokenizer.cpp:27 5 + 9 < 11
+[tinyLLM] greedy_tokenizer.cpp:27 5 + 10 < 11
+[tinyLLM] greedy_tokenizer.cpp:41 Pushed back  world, IHdvcmxk, 1917
+[tinyLLM] greedy_tokenizer.cpp:44 Pos at 15, size of input: 11

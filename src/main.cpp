@@ -7,6 +7,6 @@ int main() {
     for (int token : m.tokenize(f)) {
         std::cout << " " << token;
     }
-    std::cout << "\n";
+    std::cout << std::endl;
     return 0;
 }

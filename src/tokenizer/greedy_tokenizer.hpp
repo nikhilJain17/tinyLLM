@@ -8,7 +8,7 @@
 
 /**
  * This is a naive tokenizer which greedily does a substring match and hashmap lookup to match tokens.
- * This is the baseline to measure performance improvements from byte-pair encoding tokenization.
+ * This is the baseline to measure performance improvements.
  */
 class GreedyTokenizer : public Tokenizer {
 public:    
@@ -17,6 +17,6 @@ public:
     std::vector<int> tokenize(std::string_view input);
 private:
     std::unordered_map<std::string, int> token_map;
-    // TODO: thesis section: experiment with other token vocabularies and measure token/s
+    // TODO: (experiment) try other token vocabularies of different sizes and measure token/s
     std::string token_filepath = "resources/cl100k_base.tiktoken";
 };

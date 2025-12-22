@@ -20,3 +20,12 @@ cmake --build build --target run
 ### For running debug
 cmake --build build-debug --target run
 
+## Run unit tests
+mkdir -p build
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target run_tests
+
+
+## Nuke and rebuild
+cd build && cmake --build . --target clean && cmake --build .
+

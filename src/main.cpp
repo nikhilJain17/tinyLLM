@@ -5,7 +5,7 @@ int main() {
     GreedyTokenizer m;
     std::string f = "Hello world";
     for (int token : m.tokenize(f)) {
-        std::cout << " " << token;
+        std::cout << ", " << token;
     }
     std::cout << std::endl;
     return 0;

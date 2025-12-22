@@ -11,7 +11,7 @@ GreedyTokenizer::GreedyTokenizer() {
         this->token_map[token] = token_id;
     }
     ifs.close();
-    DEBUG_LOG("Loaded " << this->token_map.size() << " tokens into tokenizer.");
+    DEBUG_LOG("Loaded ", this->token_map.size(), " tokens into tokenizer.");
 }
 
 std::vector<int> GreedyTokenizer::tokenize(std::string_view input) {
@@ -29,7 +29,7 @@ std::vector<int> GreedyTokenizer::tokenize(std::string_view input) {
         }
         // TODO: handle unknown token
         if (longest_substr_len == 0) {
-            DEBUG_LOG("Encountered unknown symbol within input: " << input);
+            DEBUG_LOG("Encountered unknown symbol within input: ", input);
         }
         auto substr = std::string(input.substr(pos, longest_substr_len));
         auto encoded = base64::encode(substr);
@@ -38,3 +38,4 @@ std::vector<int> GreedyTokenizer::tokenize(std::string_view input) {
     }
     return tokens;
 }
+// TODO: untokenize (for debugging and testing mostly)

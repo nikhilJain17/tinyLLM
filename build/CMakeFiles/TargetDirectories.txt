@@ -1,4 +1,0 @@
-/Users/nikhil.jain/Documents/UCSC_Masters/GPU_MODE/tinyLLM/build/CMakeFiles/tinyLLM.dir
-/Users/nikhil.jain/Documents/UCSC_Masters/GPU_MODE/tinyLLM/build/CMakeFiles/run.dir
-/Users/nikhil.jain/Documents/UCSC_Masters/GPU_MODE/tinyLLM/build/CMakeFiles/edit_cache.dir
-/Users/nikhil.jain/Documents/UCSC_Masters/GPU_MODE/tinyLLM/build/CMakeFiles/rebuild_cache.dir

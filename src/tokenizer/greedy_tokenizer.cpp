@@ -22,7 +22,6 @@ GreedyTokenizer::GreedyTokenizer() {
         std::string decoded_token = base64::decode(base64_token);
         
         this->token_map[decoded_token] = token_id;
-        this->token_id_to_str_map[token_id] = decoded_token;
     }
     
     DEBUG_LOG("Loaded ", this->token_map.size(), " tokens into tokenizer.");

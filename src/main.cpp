@@ -3,7 +3,7 @@
 #include "tokenizer/base64.hpp"
 int main() {
     HashMapTokenizer m;
-    std::string f = "460 (-0.6%) ";
+    std::string f = "490 (−0.6%)";
     for (int token : m.tokenize(f)) {
         std::cout << ", " << token;
     }

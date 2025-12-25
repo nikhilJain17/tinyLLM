@@ -73,6 +73,11 @@ std::vector<int> HashMapTokenizer::tokenize(std::string_view input) {
             std::cout << "Merging: " << curr << " + " << next << " = " << curr_token << "\n";
             symbol_list[lowest_merge_index] = curr_token;
             symbol_list.erase(symbol_list.begin() + lowest_merge_index + 1);
+            std::cout << "Symbol list after merge: ";
+            for (auto s : symbol_list) {
+                std::cout << s << ", ";
+            }
+            std::cout << "\n";
         }
         
     } while (lowest_merge_index >= 0);

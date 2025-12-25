@@ -1,3 +1,5 @@
+#pragma once
+
 #include <string>
 #include <vector>
 
@@ -5,6 +7,5 @@
 class Tokenizer {
 public:
     virtual std::vector<int> tokenize(std::string_view) = 0;
-    virtual ~Tokenizer() = default;
-    
+    virtual ~Tokenizer() = default;  
 };

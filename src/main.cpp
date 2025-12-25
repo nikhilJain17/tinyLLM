@@ -1,9 +1,9 @@
 #include <iostream>
-#include "tokenizer/greedy_tokenizer.hpp"
+#include "tokenizer/hashmap_tokenizer.hpp"
 #include "tokenizer/base64.hpp"
 int main() {
-    GreedyTokenizer m;
-    std::string f = "Hello world";
+    HashMapTokenizer m;
+    std::string f = "460 (-0.6%) ";
     for (int token : m.tokenize(f)) {
         std::cout << ", " << token;
     }

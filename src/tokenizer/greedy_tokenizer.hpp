@@ -15,7 +15,9 @@ public:
     GreedyTokenizer();
     GreedyTokenizer(std::string_view token_filepath);
     std::vector<int> tokenize(std::string_view input);
+    
 private:
+    // TODO: Compare performance of a trie or memory-mapped file
     std::unordered_map<std::string, int> token_map;
     // TODO: (experiment) try other token vocabularies of different sizes and measure token/s
     std::string token_filepath = "resources/cl100k_base.tiktoken";

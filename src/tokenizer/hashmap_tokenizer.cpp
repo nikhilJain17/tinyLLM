@@ -38,12 +38,6 @@ std::vector<int> HashMapTokenizer::tokenize(std::string_view input) {
     for (int i = 0; i < input.size(); i++) {
         symbol_list.push_back(std::string(1, input[i]));
     }
-    std::cout << "Input:       " << input << "\n";
-    std::cout << "Symbol list: ";
-    for (auto s : symbol_list) {
-        std::cout << s;
-    }
-    std::cout << "\n";
 
     std::vector<int> tokens;
     int lowest_merge_rank;
@@ -61,7 +55,6 @@ std::vector<int> HashMapTokenizer::tokenize(std::string_view input) {
                 if (this->token_map[curr_token] < lowest_merge_rank) {
                     lowest_merge_rank = this->token_map[curr_token];
                     lowest_merge_index = i;
-                    std::cout << "Found a nice token: " << curr_token << ", of rank: " << lowest_merge_rank << "\n";
                 }
             }
         }
@@ -70,14 +63,8 @@ std::vector<int> HashMapTokenizer::tokenize(std::string_view input) {
             std::string curr = symbol_list[lowest_merge_index];
             std::string next = symbol_list[lowest_merge_index+1];
             std::string curr_token = curr.append(next); 
-            std::cout << "Merging: " << curr << " + " << next << " = " << curr_token << "\n";
             symbol_list[lowest_merge_index] = curr_token;
             symbol_list.erase(symbol_list.begin() + lowest_merge_index + 1);
-            std::cout << "Symbol list after merge: ";
-            for (auto s : symbol_list) {
-                std::cout << s << ", ";
-            }
-            std::cout << "\n";
         }
         
     } while (lowest_merge_index >= 0);

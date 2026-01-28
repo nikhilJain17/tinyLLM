@@ -45,6 +45,9 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     target_compile_definitions(tinyLLM PRIVATE TINYLLM_DEBUG)
 endif()
 
+#################################
+# Testing
+#################################
 # Function to create a test executable with source files, GTest, and precompiled headers
 function(add_tinyllm_test test_name)
     set(TEST_SRC "${PROJECT_SOURCE_DIR}/test/${test_name}.cpp")
@@ -100,3 +103,52 @@ add_custom_target(run_tests
     COMMENT "Rebuilding all and running all tests..."
     USES_TERMINAL
 )
+
+#############################
+# Benchmarking
+#############################
+# -------------------------------
+# Function to create a benchmark executable
+# -------------------------------
+function(add_tinyllm_bench bench_name)
+    set(BENCH_SRC "${PROJECT_SOURCE_DIR}/bench/${bench_name}.cpp")
+    if(NOT EXISTS ${BENCH_SRC})
+        message(FATAL_ERROR "Bench source file ${BENCH_SRC} does not exist")
+    endif()
+
+    # Collect all implementation sources BUT exclude main.cpp
+    file(GLOB_RECURSE IMPLEMENTATION_SOURCES
+        CONFIGURE_DEPENDS
+        "${PROJECT_SOURCE_DIR}/src/*.cpp"
+    )
+    list(FILTER IMPLEMENTATION_SOURCES EXCLUDE REGEX ".*/main\\.cpp$")
+
+    add_executable(${bench_name}
+        ${BENCH_SRC}
+        ${IMPLEMENTATION_SOURCES}
+    )
+
+    target_include_directories(${bench_name} PRIVATE
+        ${PROJECT_SOURCE_DIR}/src
+    )
+
+    # Use the same precompiled header setup as your other targets
+    target_precompile_headers(${bench_name} PRIVATE src/debug.h)
+
+    # Enable debug logging in Debug builds
+    target_compile_definitions(${bench_name} PRIVATE
+        $<$<CONFIG:Debug>:TINYLLM_DEBUG>
+    )
+
+    # Convenience target: cmake --build build --target run_<bench_name>
+    add_custom_target(run_${bench_name}
+        COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${bench_name}
+        DEPENDS ${bench_name}
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+        COMMENT "Running ${bench_name}..."
+        USES_TERMINAL
+    )
+endfunction()
+
+# Add your tokenizer benchmark
+add_tinyllm_bench(tokenizer_bench)

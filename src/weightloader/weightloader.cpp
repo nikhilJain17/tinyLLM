@@ -6,6 +6,8 @@ WeightLoader::WeightLoader(const std::string &filepath) : filepath(filepath) {
 			  this->parse_magic_number() == 1 ? "VALID" : "NOT VALID");
 	DEBUG_LOG("GGUF version ", this->parse_gguf_version());
 	DEBUG_LOG("Loaded ", this->parse_tensor_count(), " tensors.");
+	DEBUG_LOG("Loaded ", this->parse_metadata_kv_count(),
+			  " metadata kv pairs.");
 }
 
 void WeightLoader::load_fully_resident() {
@@ -36,19 +38,27 @@ bool WeightLoader::parse_magic_number() {
 }
 
 int WeightLoader::parse_gguf_version() {
-	return (static_cast<uint32_t>(buffer[4]) << 0) |
-		   (static_cast<uint32_t>(buffer[5]) << 8) |
-		   (static_cast<uint32_t>(buffer[6]) << 16) |
-		   (static_cast<uint32_t>(buffer[7]) << 24);
+	uint32_t gguf_version = 0;
+	for (int i = 0; i < 4; i++) {
+		gguf_version += this->buffer[4 + i] << (8 * i);
+	}
+	return gguf_version;
 }
 
 int WeightLoader::parse_tensor_count() {
-	return (static_cast<uint64_t>(buffer[8]) << 0) |
-		   (static_cast<uint64_t>(buffer[9]) << 8) |
-		   (static_cast<uint64_t>(buffer[10]) << (8 * 2)) |
-		   (static_cast<uint64_t>(buffer[11]) << (8 * 3)) |
-		   (static_cast<uint64_t>(buffer[12]) << (8 * 4)) |
-		   (static_cast<uint64_t>(buffer[13]) << (8 * 5)) |
-		   (static_cast<uint64_t>(buffer[14]) << (8 * 6)) |
-		   (static_cast<uint64_t>(buffer[15]) << (8 * 7));
+	uint64_t tensor_count = 0;
+	for (int i = 0; i < 8; i++) {
+		tensor_count += this->buffer[8 + i] << (8 * i);
+	}
+	return tensor_count;
 }
+
+int WeightLoader::parse_metadata_kv_count() {
+	uint64_t metadata_kv_count = 0;
+	for (int i = 0; i < 8; i++) {
+		metadata_kv_count += this->buffer[16 + i] << (8 * i);
+	}
+	return metadata_kv_count;
+}
+
+// STOPSHIP: parse metadata kv pairs

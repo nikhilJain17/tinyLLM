@@ -29,6 +29,7 @@ class WeightLoader {
 	bool parse_magic_number();
 	int parse_gguf_version();
 	int parse_tensor_count();
+	int parse_metadata_kv_count();
 	// If the GPU has enough VRAM, load all tensors
 	void load_fully_resident();
 	// Otherwise, stream them to GPU

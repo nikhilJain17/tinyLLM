@@ -1,5 +1,4 @@
 #include "weightloader.hpp"
-#include <iomanip>
 WeightLoader::WeightLoader(const std::string &filepath) : filepath(filepath) {
 	this->buffer = std::vector<uint8_t>();
 	// TODO: perf
@@ -7,6 +6,7 @@ WeightLoader::WeightLoader(const std::string &filepath) : filepath(filepath) {
 	this->load_fully_resident();
 	DEBUG_LOG("Magic number is ",
 			  this->parse_magic_number() == 1 ? "VALID" : "NOT VALID");
+    DEBUG_LOG("GGUF version is ", parse_gguf_version());
 }
 
 void WeightLoader::load_fully_resident() {
@@ -31,4 +31,11 @@ void WeightLoader::load_fully_resident() {
 bool WeightLoader::parse_magic_number() {
 	return this->buffer[0] == 0x47 && this->buffer[1] == 0x47 &&
 		   this->buffer[2] == 0x55 && this->buffer[3] == 0x46;
+}
+
+int WeightLoader::parse_gguf_version() {
+    return (static_cast<uint32_t>(buffer[4]) << 0)
+    | (static_cast<uint32_t>(buffer[5]) << 8)
+    | (static_cast<uint32_t>(buffer[6]) << 16)
+    | (static_cast<uint32_t>(buffer[7]) << 24);
 }

@@ -5,6 +5,6 @@
 #include <iostream>
 
 int main() {
-  WeightLoader w(
-      "resources/ggml-org_gemma-3-1b-it-GGUF_gemma-3-1b-it-Q4_K_M.gguf");
+	WeightLoader w(
+		"resources/ggml-org_gemma-3-1b-it-GGUF_gemma-3-1b-it-Q4_K_M.gguf");
 }

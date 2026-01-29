@@ -4,7 +4,8 @@ WeightLoader::WeightLoader(const std::string &filepath) : filepath(filepath) {
 	this->load_fully_resident();
 	DEBUG_LOG("Magic number is ",
 			  this->parse_magic_number() == 1 ? "VALID" : "NOT VALID");
-	DEBUG_LOG("GGUF version is ", parse_gguf_version());
+	DEBUG_LOG("GGUF version ", this->parse_gguf_version());
+	DEBUG_LOG("Loaded ", this->parse_tensor_count(), " tensors.");
 }
 
 void WeightLoader::load_fully_resident() {
@@ -39,4 +40,15 @@ int WeightLoader::parse_gguf_version() {
 		   (static_cast<uint32_t>(buffer[5]) << 8) |
 		   (static_cast<uint32_t>(buffer[6]) << 16) |
 		   (static_cast<uint32_t>(buffer[7]) << 24);
+}
+
+int WeightLoader::parse_tensor_count() {
+	return (static_cast<uint64_t>(buffer[8]) << 0) |
+		   (static_cast<uint64_t>(buffer[9]) << 8) |
+		   (static_cast<uint64_t>(buffer[10]) << (8 * 2)) |
+		   (static_cast<uint64_t>(buffer[11]) << (8 * 3)) |
+		   (static_cast<uint64_t>(buffer[12]) << (8 * 4)) |
+		   (static_cast<uint64_t>(buffer[13]) << (8 * 5)) |
+		   (static_cast<uint64_t>(buffer[14]) << (8 * 6)) |
+		   (static_cast<uint64_t>(buffer[15]) << (8 * 7));
 }

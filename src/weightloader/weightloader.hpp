@@ -1,15 +1,15 @@
 #pragma once
 
-#include <cmath>
 #include <fcntl.h>
 #include <fstream>
-#include <iomanip>
 #include <iostream>
 #include <string>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <vector>
 
+#include <cmath>
+#include <iomanip>
 #define CHUNK 16777216
 
 typedef struct {
@@ -28,6 +28,7 @@ class WeightLoader {
 	const std::string filepath;
 	bool parse_magic_number();
 	int parse_gguf_version();
+	int parse_tensor_count();
 	// If the GPU has enough VRAM, load all tensors
 	void load_fully_resident();
 	// Otherwise, stream them to GPU

@@ -9,6 +9,10 @@ WeightLoader::WeightLoader(const std::string &filepath) : filepath(filepath) {
 			  " metadata kv pairs.");
 
 	this->parse_metadata_kv_pairs();
+	DEBUG_LOG("Successfully parsed ", this->metadata.size(), " metadata kv pairs.");
+#ifdef TINYLLM_DEBUG
+	this->dump_metadata();
+#endif
 }
 
 void WeightLoader::load_fully_resident() {
@@ -55,72 +59,50 @@ uint64_t WeightLoader::parse_metadata_kv_count() {
 	return this->peek_u64_little_endian(16);
 }
 
-// STOPSHIP: parse metadata kv pairs
-std::unordered_map<std::string, MetadataValue> WeightLoader::parse_metadata_kv_pairs() {
-	int metadata_kv_count = this->parse_metadata_kv_count();
-	std::unordered_map<std::string, MetadataValue> metadata;
+void WeightLoader::parse_metadata_kv_pairs() {
+	int metadata_kv_count = this->parse_metadata_kv_count();	
 	size_t cursor = 24;
 	for (int i = 0; i < metadata_kv_count; i++) {
-		// First 8 bytes is key_len
-		// Next key_len bytes is the key
-		// Next 4 bytes is value type
-		// Then proceed from there
 		uint64_t key_len = consume_u64_little_endian(cursor);
 		std::string key = this->consume_str(cursor, key_len);
-		std::cout << "key: " << key <<  ", cursor: " << cursor << "\n";
-
 		MetadataType type = static_cast<MetadataType>(this->consume_u32_little_endian(cursor));
-		// std::cout << "metadata type: " << (type) << "\n";
 		switch (type) {
 			case MetadataType::str: {
 				uint64_t str_len = consume_u64_little_endian(cursor);
 				std::string value = this->consume_str(cursor, str_len);
-				std::cout << "> value str: " << value << "\n";
-				metadata.try_emplace(key, MetadataValue{type, value});
+				this->metadata.try_emplace(key, MetadataValue{type, value});
 				break;
 			}
 			case MetadataType::u32: {
 				uint32_t value = this->consume_u32_little_endian(cursor);
-				std::cout << "> value u32: " << value << "\n";
-				metadata.try_emplace(key, MetadataValue{type, value});
+				this->metadata.try_emplace(key, MetadataValue{type, value});
 				break;
 			}
 			case MetadataType::u64: {
 				uint64_t value = this->consume_u32_little_endian(cursor);
-				std::cout << "> value u64: " << value << "\n";
-				metadata.try_emplace(key, MetadataValue{type, value});
+				this->metadata.try_emplace(key, MetadataValue{type, value});
 				break;
+			}
+			case MetadataType::f32: {
+				float value = this->consume_f32_little_endian(cursor);
+				this->metadata.try_emplace(key, MetadataValue{type, value});
+				break;
+			}
+			case MetadataType::boolean: {
+				bool value = this->consume_bool(cursor);
+				this->metadata.try_emplace(key, MetadataValue{type, value});	
+				break;	
 			}
 			case MetadataType::array: {
 				std::vector<MetadataValue> array_vals = this->consume_array(cursor);	
-
-				std::cout << "> value array_vals:\n";
-				for (const auto& val : array_vals) {
-					std::cout << "\t";
-					std::visit([](const auto& v) {
-						using T = std::decay_t<decltype(v)>;
-						if constexpr (std::is_same_v<T, std::vector<MetadataValue>>) {
-							std::cout << "[array size=" << v.size() << "]";
-						} else if constexpr (std::is_same_v<T, uint8_t> || std::is_same_v<T, int8_t>) {
-							std::cout << static_cast<int>(v); // numeric, not char
-						} else {
-							std::cout << v;
-						}
-					}, val.payload);
-					std::cout << "\n";
-				}
-
-				metadata.try_emplace(key, MetadataValue{type, array_vals});
+				this->metadata.try_emplace(key, MetadataValue{type, array_vals});
 				break;
 			}
 			default: {
 				throw std::invalid_argument("got invalid metadata value type: " + std::to_string(type));
 			}
 		}
-	
-
 	}
-	return metadata;
 }
 
 uint64_t WeightLoader::peek_u64_little_endian(size_t index) {
@@ -145,6 +127,17 @@ uint32_t WeightLoader::peek_u32_little_endian(size_t index) {
 	return result;
 }
 
+bool WeightLoader::consume_bool(size_t& cursor) {
+	if (this->buffer[cursor] == 0) {
+		cursor++;
+		return false;
+	} else if (this->buffer[cursor] == 1) {
+		cursor++;
+		return true;
+	}
+	throw std::invalid_argument("invalid bool");
+}
+
 uint64_t WeightLoader::consume_u64_little_endian(size_t& cursor) {
 	uint64_t result = peek_u64_little_endian(cursor);
 	cursor += 8;
@@ -154,6 +147,16 @@ uint64_t WeightLoader::consume_u64_little_endian(size_t& cursor) {
 uint32_t WeightLoader::consume_u32_little_endian(size_t& cursor) {
 	uint32_t result = peek_u32_little_endian(cursor);
 	cursor += 4;
+	return result;
+}
+
+float WeightLoader::consume_f32_little_endian(size_t& cursor) {
+	float result = std::bit_cast<float>(consume_u32_little_endian(cursor));
+	return result;
+}
+
+int32_t WeightLoader::consume_i32_little_endian(size_t& cursor) {
+	int32_t result = std::bit_cast<int32_t>(consume_u32_little_endian(cursor));
 	return result;
 }
 
@@ -174,10 +177,9 @@ std::vector<MetadataValue> WeightLoader::consume_array(size_t& cursor) {
 	MetadataType arr_type = static_cast<MetadataType>(this->consume_u32_little_endian(cursor));
 	uint64_t arr_len = this->consume_u64_little_endian(cursor);
 	std::vector<MetadataValue> arr_vals;
-	std::cout << "Parsing array of type: " << arr_type << "\n";
 	switch (arr_type) {
 		case MetadataType::str: {
-			for (int i = 0; i < arr_len; i++) {
+			for (size_t i = 0; i < arr_len; i++) {
 				uint64_t str_len = this->consume_u64_little_endian(cursor);
 				std::string str = this->consume_str(cursor, str_len);
 				arr_vals.push_back(MetadataValue{arr_type, str});
@@ -185,15 +187,29 @@ std::vector<MetadataValue> WeightLoader::consume_array(size_t& cursor) {
 			break;
 		}
 		case MetadataType::u32: {
-			for (int i = 0; i < arr_len; i++) {
+			for (size_t i = 0; i < arr_len; i++) {
 				uint32_t val = this->consume_u32_little_endian(cursor);
 				arr_vals.push_back(MetadataValue{arr_type, val});
 			}
 			break;
 		}
 		case MetadataType::u64: {
-			for (int i = 0; i < arr_len; i++) {
+			for (size_t i = 0; i < arr_len; i++) {
 				uint64_t val = this->consume_u64_little_endian(cursor);
+				arr_vals.push_back(MetadataValue{arr_type, val});
+			}
+			break;
+		}
+		case MetadataType::f32: {
+			for (size_t i = 0; i < arr_len; i++) {
+				float val = this->consume_f32_little_endian(cursor);
+				arr_vals.push_back(MetadataValue{arr_type, val});
+			}
+			break;
+		}
+		case MetadataType::i32: {
+			for (size_t i = 0; i < arr_len; i++) {
+				int32_t val = this->consume_i32_little_endian(cursor);
 				arr_vals.push_back(MetadataValue{arr_type, val});
 			}
 			break;
@@ -205,3 +221,36 @@ std::vector<MetadataValue> WeightLoader::consume_array(size_t& cursor) {
 	}
 	return arr_vals;
 }
+
+static void dump_metadata_value(const MetadataValue& mv, int indent = 0) {
+    auto pad = std::string(indent, ' ');
+
+    std::visit([&](const auto& v) {
+        using T = std::decay_t<decltype(v)>;
+
+        if constexpr (std::is_same_v<T, std::vector<MetadataValue>>) {
+            std::cout << pad << "[array size=" << v.size() << "]\n";
+            for (const auto& elem : v) {
+                dump_metadata_value(elem, indent + 2);
+            }
+        } else if constexpr (std::is_same_v<T, uint8_t> ||
+                             std::is_same_v<T, int8_t>) {
+            std::cout << pad << static_cast<int>(v) << "\n";
+        } else if constexpr (std::is_same_v<T, bool>) {
+            std::cout << pad << (v ? "true" : "false") << "\n";
+        } else {
+            std::cout << pad << v << "\n";
+        }
+    }, mv.payload);
+}
+
+void WeightLoader::dump_metadata() {
+	std::cout << "[   METADATA   ]\n";
+	for (auto &kv : this->metadata) {
+		std::cout << kv.first << "  --> \n\t";
+		dump_metadata_value(kv.second, 2);
+		std::cout << "\n";
+	}
+}
+
+

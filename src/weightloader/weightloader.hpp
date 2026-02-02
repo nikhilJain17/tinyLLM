@@ -91,17 +91,22 @@ class WeightLoader {
 	std::unique_ptr<uint8_t[]> buffer;
 	const std::string filepath;	
 	int buf_size;
+	std::unordered_map<std::string, MetadataValue> metadata;
 
 	bool parse_magic_number();
 	int parse_gguf_version();
 	uint64_t parse_tensor_count();
 	uint64_t parse_metadata_kv_count();
-	std::unordered_map<std::string, MetadataValue> parse_metadata_kv_pairs();
+	void parse_metadata_kv_pairs();
+	void dump_metadata();
 	
 	uint64_t peek_u64_little_endian(size_t);
 	uint32_t peek_u32_little_endian(size_t);
 	uint64_t consume_u64_little_endian(size_t&);
 	uint32_t consume_u32_little_endian(size_t&);
+	float consume_f32_little_endian(size_t&);
+	int32_t consume_i32_little_endian(size_t&);
+	bool consume_bool(size_t&);
 	std::string consume_str(size_t&, size_t);
 	std::vector<MetadataValue> consume_array(size_t&);
 	

@@ -1,13 +1,14 @@
 #include "weightloader.hpp"
 WeightLoader::WeightLoader(const std::string &filepath) : filepath(filepath) {
-	this->buffer = std::vector<uint8_t>();
 	this->load_fully_resident();
 	DEBUG_LOG("Magic number is ",
 			  this->parse_magic_number() == 1 ? "VALID" : "NOT VALID");
 	DEBUG_LOG("GGUF version ", this->parse_gguf_version());
-	DEBUG_LOG("Loaded ", this->parse_tensor_count(), " tensors.");
-	DEBUG_LOG("Loaded ", this->parse_metadata_kv_count(),
+	DEBUG_LOG("Contains ", this->parse_tensor_count(), " tensors.");
+	DEBUG_LOG("Contains ", this->parse_metadata_kv_count(),
 			  " metadata kv pairs.");
+
+	this->parse_metadata_kv_pairs();
 }
 
 void WeightLoader::load_fully_resident() {
@@ -21,15 +22,17 @@ void WeightLoader::load_fully_resident() {
 	ssize_t total_bytes_read = 0;
 	struct stat st;
 	stat(this->filepath.c_str(), &st);
-	this->buffer.reserve(st.st_size);
+	this->buf_size = st.st_size;
+	this->buffer = std::make_unique<uint8_t[]>(this->buf_size);
 	while ((bytes_read =
-				read(fd, this->buffer.data() + bytes_read, st.st_size)) > 0) {
+				read(fd, this->buffer.get() + total_bytes_read, st.st_size)) > 0) {
 		DEBUG_LOG("Read ", bytes_read, "/", st.st_size, " bytes, or ",
 				  (bytes_read / st.st_size) * 100, "% of the file.");
 		total_bytes_read += bytes_read;
 	}
 	DEBUG_LOG("Successfully loaded weights from ", this->filepath, " totaling ",
 			  total_bytes_read, " bytes.");
+	std::cout << "Buffer.size: " << this->buf_size << "\n";
 }
 
 bool WeightLoader::parse_magic_number() {
@@ -46,19 +49,51 @@ int WeightLoader::parse_gguf_version() {
 }
 
 int WeightLoader::parse_tensor_count() {
-	uint64_t tensor_count = 0;
-	for (int i = 0; i < 8; i++) {
-		tensor_count += this->buffer[8 + i] << (8 * i);
-	}
-	return tensor_count;
+	return this->parse_u64_little_endian(8);
 }
 
 int WeightLoader::parse_metadata_kv_count() {
-	uint64_t metadata_kv_count = 0;
-	for (int i = 0; i < 8; i++) {
-		metadata_kv_count += this->buffer[16 + i] << (8 * i);
-	}
-	return metadata_kv_count;
+	return this->parse_u64_little_endian(16);
 }
 
 // STOPSHIP: parse metadata kv pairs
+std::unordered_map<std::string, MetadataValue> WeightLoader::parse_metadata_kv_pairs() {
+	int metadata_kv_count = this->parse_metadata_kv_count();
+	std::unordered_map<std::string, MetadataValue> metadata;
+	int cursor = 24;
+	for (int i = 0; i < metadata_kv_count; i++) {
+		// First 8 bytes is key_len
+		// Next key_len bytes is the key
+		// Next 4 bytes is value type
+		// Then proceed from there
+		uint64_t key_len = parse_u64_little_endian(cursor);
+		std::cout << "key len: " << key_len << "\n";
+		cursor += 8;
+		std::string key = this->parse_str(cursor, key_len);
+		cursor += key_len;
+		std::cout << "key: " << key << "\n";
+		break;  
+
+	}
+	return metadata;
+}
+
+uint64_t WeightLoader::parse_u64_little_endian(int index) {
+	uint64_t result = 0;
+	for (int i = 0; i < 4; i++) {
+		result += this->buffer[index + i] << (8 * i);
+	}
+	return result;
+}
+
+std::string WeightLoader::parse_str(int index, int size) {
+	std::string result;
+	for (int i = index; i < index + size; i++) {
+		// if (i > this->buffer.size()) {
+		// 	std::cout << "wtf: " << i << " > " << this->buffer.size();
+		// 	exit(1);
+		// }
+		result += this->buffer[i];
+	}
+	return result;
+}

@@ -11,6 +11,8 @@
 #include <variant>
 #include <cmath>
 #include <iomanip>
+#include <stdexcept>
+
 #define CHUNK 16777216
 
 typedef struct {
@@ -57,10 +59,32 @@ enum MetadataType: uint32_t {
     f64 = 12,
 };
 
-typedef struct {
+struct MetadataValue;
+
+using MetadataPayload = std::variant<
+    uint8_t,
+    int8_t,
+    uint16_t,
+    int16_t,
+    uint32_t,
+    int32_t,
+    float,
+    bool,
+    std::string,
+    std::vector<std::unique_ptr<MetadataValue>>,
+    uint64_t,
+    int64_t,
+    double
+>;
+
+
+struct MetadataValue {
 	MetadataType type;
-	std::variant<MetadataType> data;
-} MetadataValue;
+	MetadataPayload payload;
+};
+
+using MetadataValue = struct MetadataValue;
+
 
 class WeightLoader {
   private:
@@ -69,15 +93,18 @@ class WeightLoader {
 	int buf_size;
 	bool parse_magic_number();
 	int parse_gguf_version();
-	int parse_tensor_count();
-	int parse_metadata_kv_count();
+	uint64_t parse_tensor_count();
+	uint64_t parse_metadata_kv_count();
 	std::unordered_map<std::string, MetadataValue> parse_metadata_kv_pairs();
 	// If the GPU has enough VRAM, load all tensors
 	void load_fully_resident();
 	// Otherwise, stream them to GPU
 	bool stream_to_gpu();
-	uint64_t parse_u64_little_endian(int);
-	std::string parse_str(int, int);
+	uint64_t peek_u64_little_endian(size_t);
+	uint32_t peek_u32_little_endian(size_t);
+	uint64_t consume_u64_little_endian(size_t&);
+	uint32_t consume_u32_little_endian(size_t&);
+	std::string consume_str(size_t&, int);
   public:
 	WeightLoader(const std::string &filepath);
 	Metadata get_metadata();

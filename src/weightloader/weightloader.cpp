@@ -32,7 +32,6 @@ void WeightLoader::load_fully_resident() {
 	}
 	DEBUG_LOG("Successfully loaded weights from ", this->filepath, " totaling ",
 			  total_bytes_read, " bytes.");
-	std::cout << "Buffer.size: " << this->buf_size << "\n";
 }
 
 bool WeightLoader::parse_magic_number() {
@@ -48,52 +47,91 @@ int WeightLoader::parse_gguf_version() {
 	return gguf_version;
 }
 
-int WeightLoader::parse_tensor_count() {
-	return this->parse_u64_little_endian(8);
+uint64_t WeightLoader::parse_tensor_count() {
+	return this->peek_u64_little_endian(size_t(8));
 }
 
-int WeightLoader::parse_metadata_kv_count() {
-	return this->parse_u64_little_endian(16);
+uint64_t WeightLoader::parse_metadata_kv_count() {
+	return this->peek_u64_little_endian(16);
 }
 
 // STOPSHIP: parse metadata kv pairs
 std::unordered_map<std::string, MetadataValue> WeightLoader::parse_metadata_kv_pairs() {
 	int metadata_kv_count = this->parse_metadata_kv_count();
 	std::unordered_map<std::string, MetadataValue> metadata;
-	int cursor = 24;
+	size_t cursor = 24;
 	for (int i = 0; i < metadata_kv_count; i++) {
 		// First 8 bytes is key_len
 		// Next key_len bytes is the key
 		// Next 4 bytes is value type
 		// Then proceed from there
-		uint64_t key_len = parse_u64_little_endian(cursor);
-		std::cout << "key len: " << key_len << "\n";
-		cursor += 8;
-		std::string key = this->parse_str(cursor, key_len);
-		cursor += key_len;
-		std::cout << "key: " << key << "\n";
-		break;  
+		uint64_t key_len = consume_u64_little_endian(cursor);
+		std::cout << "key len: " << key_len << ", cursor: " << cursor << "\n";
+		std::string key = this->consume_str(cursor, key_len);
+		std::cout << "key: " << key <<  ", cursor: " << cursor << "\n";
+
+		MetadataType type = static_cast<MetadataType>(this->consume_u32_little_endian(cursor));
+		std::cout << "metadata type: " << (type) << "\n";
+		switch (type) {
+			case MetadataType::str: {
+				uint64_t str_len = consume_u64_little_endian(cursor);
+				std::string value = this->consume_str(cursor, str_len);
+				std::cout << "value: " << value << "\n";
+				metadata.try_emplace(key, MetadataValue{type, value});
+				break;
+			}
+			default: {
+				throw std::invalid_argument("got invalid metadata vaue type!");
+			}
+		}
+	
 
 	}
 	return metadata;
 }
 
-uint64_t WeightLoader::parse_u64_little_endian(int index) {
+uint64_t WeightLoader::peek_u64_little_endian(size_t index) {
 	uint64_t result = 0;
-	for (int i = 0; i < 4; i++) {
+	for (int i = 0; i < 8; i++) {
+		if (index + i > this->buf_size) {
+			throw std::invalid_argument("trying to read beyond buffer size!");
+		}
 		result += this->buffer[index + i] << (8 * i);
 	}
 	return result;
 }
 
-std::string WeightLoader::parse_str(int index, int size) {
+uint32_t WeightLoader::peek_u32_little_endian(size_t index) {
+	uint64_t result = 0;
+	for (int i = 0; i < 4; i++) {
+		if (index + i > this->buf_size) {
+			throw std::invalid_argument("trying to read beyond buffer size!");
+		}
+		result += this->buffer[index + i] << (8 * i);
+	}
+	return result;
+}
+
+uint64_t WeightLoader::consume_u64_little_endian(size_t& cursor) {
+	uint64_t result = peek_u64_little_endian(cursor);
+	cursor += 8;
+	return result;
+}
+
+uint32_t WeightLoader::consume_u32_little_endian(size_t& cursor) {
+	uint32_t result = peek_u32_little_endian(cursor);
+	cursor += 4;
+	return result;
+}
+
+std::string WeightLoader::consume_str(size_t& cursor, int size) {
 	std::string result;
-	for (int i = index; i < index + size; i++) {
-		// if (i > this->buffer.size()) {
-		// 	std::cout << "wtf: " << i << " > " << this->buffer.size();
-		// 	exit(1);
-		// }
+	for (int i = cursor; i < cursor + size; i++) {
+		if (i > this->buf_size) {
+			throw std::invalid_argument("trying to read beyond buffer size!");
+		}
 		result += this->buffer[i];
 	}
+	cursor += size;
 	return result;
 }

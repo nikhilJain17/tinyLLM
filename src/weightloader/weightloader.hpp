@@ -71,7 +71,7 @@ using MetadataPayload = std::variant<
     float,
     bool,
     std::string,
-    std::vector<std::unique_ptr<MetadataValue>>,
+    std::vector<MetadataValue>,
     uint64_t,
     int64_t,
     double
@@ -91,20 +91,24 @@ class WeightLoader {
 	std::unique_ptr<uint8_t[]> buffer;
 	const std::string filepath;	
 	int buf_size;
+
 	bool parse_magic_number();
 	int parse_gguf_version();
 	uint64_t parse_tensor_count();
 	uint64_t parse_metadata_kv_count();
 	std::unordered_map<std::string, MetadataValue> parse_metadata_kv_pairs();
-	// If the GPU has enough VRAM, load all tensors
-	void load_fully_resident();
-	// Otherwise, stream them to GPU
-	bool stream_to_gpu();
+	
 	uint64_t peek_u64_little_endian(size_t);
 	uint32_t peek_u32_little_endian(size_t);
 	uint64_t consume_u64_little_endian(size_t&);
 	uint32_t consume_u32_little_endian(size_t&);
-	std::string consume_str(size_t&, int);
+	std::string consume_str(size_t&, size_t);
+	std::vector<MetadataValue> consume_array(size_t&);
+	
+	// If the GPU has enough VRAM, load all tensors
+	void load_fully_resident();
+	// Otherwise, stream them to GPU
+	bool stream_to_gpu();
   public:
 	WeightLoader(const std::string &filepath);
 	Metadata get_metadata();

@@ -7,7 +7,6 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build  
   
 ## Build debug  
-mkdir -p build  
 cmake -S . -B build-debug -DCMAKE_BUILD_TYPE=Debug  
 cmake --build build-debug  
   

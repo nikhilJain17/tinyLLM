@@ -8,11 +8,16 @@ WeightLoader::WeightLoader(const std::string &filepath) : filepath(filepath) {
 	DEBUG_LOG("Contains ", this->parse_metadata_kv_count(),
 			  " metadata kv pairs.");
 
-	this->parse_metadata_kv_pairs();
+	size_t cursor = this->parse_metadata_kv_pairs();
 	DEBUG_LOG("Successfully parsed ", this->metadata.size(), " metadata kv pairs.");
 #ifdef TINYLLM_DEBUG
 	this->dump_metadata();
 #endif
+	this->parse_tensor_info(cursor);
+#ifdef TINYLLM_DEBUG
+	this->dump_tensor_info();
+#endif
+	DEBUG_LOG("Successfully parsed ", this->tensor_info.size(), " tensor info structs.");
 }
 
 void WeightLoader::load_fully_resident() {
@@ -59,7 +64,7 @@ uint64_t WeightLoader::parse_metadata_kv_count() {
 	return this->peek_u64_little_endian(16);
 }
 
-void WeightLoader::parse_metadata_kv_pairs() {
+size_t WeightLoader::parse_metadata_kv_pairs() {
 	int metadata_kv_count = this->parse_metadata_kv_count();	
 	size_t cursor = 24;
 	for (int i = 0; i < metadata_kv_count; i++) {
@@ -103,6 +108,24 @@ void WeightLoader::parse_metadata_kv_pairs() {
 			}
 		}
 	}
+	return cursor;
+}
+
+size_t WeightLoader::parse_tensor_info(size_t cursor) {
+	for (int i = 0; i < this->parse_tensor_count(); i++) {
+		TensorInfo t;
+		uint64_t str_len = consume_u64_little_endian(cursor);
+		t.name = this->consume_str(cursor, str_len);
+		t.n_dim = this->consume_u32_little_endian(cursor);
+		t.dim.resize(t.n_dim);
+		for (int j = 0; j < t.n_dim; j++) {
+			t.dim[j] = this->consume_u64_little_endian(cursor);
+		}
+		t.type = static_cast<TensorType>(this->consume_u32_little_endian(cursor));
+		t.offset = this->consume_u64_little_endian(cursor);
+		this->tensor_info.push_back(t);
+	}
+	return cursor;
 }
 
 uint64_t WeightLoader::peek_u64_little_endian(size_t index) {
@@ -222,6 +245,7 @@ std::vector<MetadataValue> WeightLoader::consume_array(size_t& cursor) {
 	return arr_vals;
 }
 
+
 static void dump_metadata_value(const MetadataValue& mv, int indent = 0) {
     auto pad = std::string(indent, ' ');
 
@@ -250,6 +274,20 @@ void WeightLoader::dump_metadata() {
 		std::cout << kv.first << "  --> \n\t";
 		dump_metadata_value(kv.second, 2);
 		std::cout << "\n";
+	}
+}
+
+void WeightLoader::dump_tensor_info() {
+	std::cout << "[   TENSOR INFO   ]\n";
+	for (auto &t : this->tensor_info) {
+		std::cout << "name: " << t.name << "\n";
+		std::cout << "\tn_dim: " << t.n_dim << "\n";
+		std::cout << "\tdim: ";
+		for (int i = 0; i < t.n_dim; i++) {
+			std::cout << t.dim[i] << " ";
+		}
+		std::cout << "\n";
+		std::cout << "\toffset: " << t.offset << "\n";
 	}
 }
 

@@ -12,6 +12,8 @@
 #include <cmath>
 #include <iomanip>
 #include <stdexcept>
+#include <span>
+#include <optional>
 
 #define CHUNK 16777216
 
@@ -71,6 +73,14 @@ typedef struct {
 	uint32_t n_dim;
 	std::vector<uint64_t> dim;
 } TensorInfo;
+
+typedef struct {
+	std::string name;
+	const uint8_t* data;
+	size_t n_bytes;
+	TensorType type;
+	std::span<const uint64_t> dim;
+} TensorView;
 
 // From https://github.com/ggml-org/ggml/blob/master/docs/gguf.md
 enum MetadataType: uint32_t {
@@ -132,14 +142,14 @@ struct MetadataValue {
 
 using MetadataValue = struct MetadataValue;
 
-
 class WeightLoader {
   private:
 	std::unique_ptr<uint8_t[]> buffer;
 	const std::string filepath;	
 	int buf_size;
+	// TODO: Turn metadata and tensor_info into zero-copy structs?
 	std::unordered_map<std::string, MetadataValue> metadata;
-	std::vector<TensorInfo> tensor_info;
+	std::unordered_map<std::string, TensorInfo> tensor_index; // name --> offset
 
 	// Parse specific parts of the gguf file
 	bool parse_magic_number();
@@ -152,6 +162,7 @@ class WeightLoader {
 	// Debug functions
 	void dump_metadata();
 	void dump_tensor_info();
+	void dump_tensor_view(TensorView);
 	
 	// Helper functions to traverse file
 	uint64_t peek_u64_little_endian(size_t);
@@ -171,5 +182,6 @@ class WeightLoader {
   public:
 	WeightLoader(const std::string &filepath);
 	Metadata get_metadata();
-	// Tensor fetch_tensor(std::string &tensor_name);
+	std::vector<TensorInfo> get_tensor_info();
+	std::optional<TensorView> fetch_tensor(std::string_view tensor_name);
 };

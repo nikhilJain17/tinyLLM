@@ -17,7 +17,13 @@ WeightLoader::WeightLoader(const std::string &filepath) : filepath(filepath) {
 #ifdef TINYLLM_DEBUG
 	this->dump_tensor_info();
 #endif
-	DEBUG_LOG("Successfully parsed ", this->tensor_info.size(), " tensor info structs.");
+	DEBUG_LOG("Successfully parsed ", this->tensor_index.size(), " tensor info structs.");
+	std::optional<TensorView> t = this->fetch_tensor("blk.1.post_ffw_norm.weight");
+	if (t.has_value()) {
+		this->dump_tensor_view(t.value());
+	} else {
+		std::cout << "Did not get tensor view\n";
+	}
 }
 
 void WeightLoader::load_fully_resident() {
@@ -42,6 +48,48 @@ void WeightLoader::load_fully_resident() {
 	DEBUG_LOG("Successfully loaded weights from ", this->filepath, " totaling ",
 			  total_bytes_read, " bytes.");
 }
+
+std::optional<TensorView> WeightLoader::fetch_tensor(std::string_view tensor_name) {
+	std::string key(tensor_name);
+	auto it = tensor_index.find(key);
+	if (it == tensor_index.end()) {
+		return std::nullopt;
+	}
+	const TensorInfo& info = it->second;
+	TensorView t;
+	t.name = info.name;
+	t.data = this->buffer.get() + info.offset;
+	size_t num_elements = 1; 
+	for (int i = 0; i < info.n_dim; i++) {
+		num_elements *= info.dim[i];
+	}
+	t.type = info.type;
+	switch (t.type) {
+		case TensorType::GGML_TYPE_F32:
+			t.n_bytes = num_elements * 4;
+			break;
+		case TensorType::GGML_TYPE_F16:
+			t.n_bytes = num_elements * 2;
+			break;
+		case TensorType::GGML_TYPE_BF16:
+			t.n_bytes = num_elements * 2;
+			break;
+		case TensorType::GGML_TYPE_Q4_0:
+			// Q4_0 blocks have one f32 for scale and 32 values of 4 bits each.
+			// [ scale | v0 v1 ... v31 ]
+			// There are 32 values in a block, and each block is 20 bytes.
+			// 4 bytes for scale, and 4 bits * 32 values = 16 bytes for the values.
+			t.n_bytes = std::ceil(num_elements / 32) * 20;
+			break;
+		case TensorType::GGML_TYPE_Q4_1:
+			break;
+		default:
+			throw std::invalid_argument("unsupported tensor type");
+	}
+	t.dim = std::span<const uint64_t>(info.dim.data(), info.dim.size());
+	return t;
+}
+
 
 bool WeightLoader::parse_magic_number() {
 	return this->buffer[0] == 0x47 && this->buffer[1] == 0x47 &&
@@ -123,7 +171,8 @@ size_t WeightLoader::parse_tensor_info(size_t cursor) {
 		}
 		t.type = static_cast<TensorType>(this->consume_u32_little_endian(cursor));
 		t.offset = this->consume_u64_little_endian(cursor);
-		this->tensor_info.push_back(t);
+		// this->tensor_info.push_back(t);
+		this->tensor_index.try_emplace(t.name, t);
 	}
 	return cursor;
 }
@@ -279,8 +328,10 @@ void WeightLoader::dump_metadata() {
 
 void WeightLoader::dump_tensor_info() {
 	std::cout << "[   TENSOR INFO   ]\n";
-	for (auto &t : this->tensor_info) {
+	for (auto &kv : this->tensor_index) {
+		auto t = kv.second;
 		std::cout << "name: " << t.name << "\n";
+		std::cout << "type: " << t.type << "\n";
 		std::cout << "\tn_dim: " << t.n_dim << "\n";
 		std::cout << "\tdim: ";
 		for (int i = 0; i < t.n_dim; i++) {
@@ -291,4 +342,13 @@ void WeightLoader::dump_tensor_info() {
 	}
 }
 
+void WeightLoader::dump_tensor_view(TensorView t) {
+	std::cout << "[   TENSOR VIEW   ]\n";
+	std::cout << t.name << "\n";
+	std::cout << "\t" << t.n_bytes << "bytes\n";
+	for (int i = 0; i < t.dim.size(); i++) {
+		std::cout << t.dim[i] << " ";
+	}
+	std::cout << "\n";
+}
 

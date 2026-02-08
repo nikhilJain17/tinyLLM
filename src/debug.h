@@ -6,8 +6,8 @@
 namespace detail {
 template <typename... Args>
 void debug_log_impl(const char *file, int line, Args &&...args) {
-	std::cerr << "[tinyLLM] " << file << ":" << line << " ";
-	(std::cerr << ... << std::forward<Args>(args)) << '\n';
+	std::cout << "[tinyLLM] " << file << ":" << line << " ";
+	(std::cout << ... << std::forward<Args>(args)) << '\n';
 }
 } // namespace detail
 

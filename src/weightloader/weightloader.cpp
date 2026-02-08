@@ -18,7 +18,7 @@ WeightLoader::WeightLoader(const std::string &filepath) : filepath(filepath) {
 	this->dump_tensor_info();
 #endif
 	DEBUG_LOG("Successfully parsed ", this->tensor_index.size(), " tensor info structs.");
-	std::optional<TensorView> t = this->fetch_tensor("blk.1.post_ffw_norm.weight");
+	std::optional<TensorView> t = this->fetch_tensor("blk.1.ffn_up.weight");
 	if (t.has_value()) {
 		this->dump_tensor_view(t.value());
 	} else {

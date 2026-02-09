@@ -1,13 +1,12 @@
 #include "weightloader.hpp"
 WeightLoader::WeightLoader(const std::string &filepath) : filepath(filepath) {
 	this->load_fully_resident();
+
 	DEBUG_LOG("Magic number is ",
-			  this->parse_magic_number() == 1 ? "VALID" : "NOT VALID");
+			  this->parse_magic_number() ? "VALID" : "NOT VALID");
 	DEBUG_LOG("GGUF version ", this->parse_gguf_version());
 	DEBUG_LOG("Contains ", this->parse_tensor_count(), " tensors.");
-	DEBUG_LOG("Contains ", this->parse_metadata_kv_count(),
-			  " metadata kv pairs.");
-
+	DEBUG_LOG("Contains ", this->parse_metadata_kv_count(), " metadata kv pairs.");
 	size_t cursor = this->parse_metadata_kv_pairs();
 	DEBUG_LOG("Successfully parsed ", this->metadata.size(), " metadata kv pairs.");
 #ifdef TINYLLM_DEBUG
@@ -18,12 +17,6 @@ WeightLoader::WeightLoader(const std::string &filepath) : filepath(filepath) {
 	this->dump_tensor_info();
 #endif
 	DEBUG_LOG("Successfully parsed ", this->tensor_index.size(), " tensor info structs.");
-	std::optional<TensorView> t = this->fetch_tensor("blk.1.ffn_up.weight");
-	if (t.has_value()) {
-		this->dump_tensor_view(t.value());
-	} else {
-		std::cout << "Did not get tensor view\n";
-	}
 }
 
 void WeightLoader::load_fully_resident() {
@@ -33,20 +26,43 @@ void WeightLoader::load_fully_resident() {
 		DEBUG_LOG("Error opening file! ", this->filepath);
 		exit(-1);
 	}
-	ssize_t bytes_read = 0;
-	ssize_t total_bytes_read = 0;
 	struct stat st;
-	stat(this->filepath.c_str(), &st);
-	this->buf_size = st.st_size;
-	this->buffer = std::make_unique<uint8_t[]>(this->buf_size);
-	while ((bytes_read =
-				read(fd, this->buffer.get() + total_bytes_read, st.st_size)) > 0) {
-		DEBUG_LOG("Read ", bytes_read, "/", st.st_size, " bytes, or ",
-				  (bytes_read / st.st_size) * 100, "% of the file.");
-		total_bytes_read += bytes_read;
-	}
-	DEBUG_LOG("Successfully loaded weights from ", this->filepath, " totaling ",
-			  total_bytes_read, " bytes.");
+    if (fstat(fd, &st) != 0) {
+        close(fd);
+        throw std::runtime_error("fstat failed");
+    }
+    this->buf_size = static_cast<size_t>(st.st_size);
+    this->buffer = std::make_unique<uint8_t[]>(this->buf_size);
+    size_t total = 0;
+    while (total < this->buf_size) {
+        size_t remaining = this->buf_size - total;
+        ssize_t n = read(fd, this->buffer.get() + total, remaining);
+
+        if (n == 0) { // EOF unexpectedly early
+            break;
+        }
+        if (n < 0) {
+            if (errno == EINTR) continue; // interrupted, retry
+            close(fd);
+            throw std::runtime_error("read failed");
+        }
+
+        total += static_cast<size_t>(n);
+        DEBUG_LOG("Read ", total, "/", this->buf_size, " bytes (",
+                  (100.0 * total) / this->buf_size, "%)");
+    }
+
+    close(fd);
+
+    if (total != this->buf_size) {
+        throw std::runtime_error("short read: file truncated?");
+    }
+
+    DEBUG_LOG("Successfully loaded weights totaling ", total, " bytes.");
+}
+
+std::unordered_map<std::string, TensorInfo> WeightLoader::get_tensor_index() {
+	return this->tensor_index;
 }
 
 std::optional<TensorView> WeightLoader::fetch_tensor(std::string_view tensor_name) {
@@ -97,6 +113,7 @@ bool WeightLoader::parse_magic_number() {
 }
 
 int WeightLoader::parse_gguf_version() {
+	std::cout << "Parse gguf version:";
 	uint32_t gguf_version = 0;
 	for (int i = 0; i < 4; i++) {
 		gguf_version += this->buffer[4 + i] << (8 * i);
@@ -171,30 +188,29 @@ size_t WeightLoader::parse_tensor_info(size_t cursor) {
 		}
 		t.type = static_cast<TensorType>(this->consume_u32_little_endian(cursor));
 		t.offset = this->consume_u64_little_endian(cursor);
-		// this->tensor_info.push_back(t);
 		this->tensor_index.try_emplace(t.name, t);
 	}
 	return cursor;
 }
 
 uint64_t WeightLoader::peek_u64_little_endian(size_t index) {
+	if (index + 7 >= this->buf_size) {
+		throw std::invalid_argument("trying to read beyond buffer size!");
+	}
 	uint64_t result = 0;
 	for (int i = 0; i < 8; i++) {
-		if (index + i > this->buf_size) {
-			throw std::invalid_argument("trying to read beyond buffer size!");
-		}
-		result += this->buffer[index + i] << (8 * i);
+		result += uint64_t(this->buffer[index + i]) << (8 * i);
 	}
 	return result;
 }
 
 uint32_t WeightLoader::peek_u32_little_endian(size_t index) {
-	uint64_t result = 0;
+	if (index + 4 >= this->buf_size) {
+		throw std::invalid_argument("trying to read beyond buffer size!");
+	}
+	uint32_t result = 0;
 	for (int i = 0; i < 4; i++) {
-		if (index + i > this->buf_size) {
-			throw std::invalid_argument("trying to read beyond buffer size!");
-		}
-		result += this->buffer[index + i] << (8 * i);
+		result += uint32_t(this->buffer[index + i]) << (8 * i);
 	}
 	return result;
 }
@@ -330,15 +346,15 @@ void WeightLoader::dump_tensor_info() {
 	std::cout << "[   TENSOR INFO   ]\n";
 	for (auto &kv : this->tensor_index) {
 		auto t = kv.second;
-		std::cout << "name: " << t.name << "\n";
-		std::cout << "type: " << t.type << "\n";
+		std::cout << "- name: " << t.name << "\n";
+		std::cout << "\ttype: " << t.type << "\n";
 		std::cout << "\tn_dim: " << t.n_dim << "\n";
 		std::cout << "\tdim: ";
 		for (int i = 0; i < t.n_dim; i++) {
 			std::cout << t.dim[i] << " ";
 		}
 		std::cout << "\n";
-		std::cout << "\toffset: " << t.offset << "\n";
+		std::cout << "\toffset: " << t.offset << "\n\n";
 	}
 }
 

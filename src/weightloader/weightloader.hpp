@@ -149,6 +149,7 @@ class WeightLoader {
 	int buf_size;
 	// TODO: Turn metadata and tensor_info into zero-copy structs?
 	std::unordered_map<std::string, MetadataValue> metadata;
+	// std::vector<TensorInfo> tensor_info;
 	std::unordered_map<std::string, TensorInfo> tensor_index; // name --> offset
 
 	// Parse specific parts of the gguf file
@@ -182,6 +183,6 @@ class WeightLoader {
   public:
 	WeightLoader(const std::string &filepath);
 	Metadata get_metadata();
-	std::vector<TensorInfo> get_tensor_info();
+	std::unordered_map<std::string, TensorInfo> get_tensor_index();
 	std::optional<TensorView> fetch_tensor(std::string_view tensor_name);
 };

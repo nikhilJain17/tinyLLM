@@ -1,5 +1,5 @@
 # tinyLLM  
-Yet another LLM inference engine  
+Inference on the edge
 
 ## Build  
 mkdir -p build  

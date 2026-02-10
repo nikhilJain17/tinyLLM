@@ -1,9 +1,16 @@
 #include "weightloader.hpp"
-WeightLoader::WeightLoader(const std::string &filepath) : filepath(filepath) {
-	this->load_fully_resident();
+WeightLoader::WeightLoader(const std::string &filepath, bool fully_resident) : filepath(filepath) {
+	this->fully_resident = fully_resident;
+	if (fully_resident) {
+		// TODO: find out threshold for loading chunked
+		// this->load_fully_resident();
+		this->load_fully_resident_chunked();
+	} else {
+		this->load_mmap();
+	}
 
 	DEBUG_LOG("Magic number is ",
-			  this->parse_magic_number() ? "VALID" : "NOT VALID");
+			this->parse_magic_number() ? "VALID" : "NOT VALID");
 	DEBUG_LOG("GGUF version ", this->parse_gguf_version());
 	DEBUG_LOG("Contains ", this->parse_tensor_count(), " tensors.");
 	DEBUG_LOG("Contains ", this->parse_metadata_kv_count(), " metadata kv pairs.");
@@ -17,6 +24,28 @@ WeightLoader::WeightLoader(const std::string &filepath) : filepath(filepath) {
 	this->dump_tensor_info();
 #endif
 	DEBUG_LOG("Successfully parsed ", this->tensor_index.size(), " tensor info structs.");
+}
+
+WeightLoader::~WeightLoader() {
+	// TODO: munmap or free unique ptr
+	if (!fully_resident) {
+		munmap(this->mmap_ptr, this->buf_size);
+	}
+}
+
+void WeightLoader::load_mmap() {
+	DEBUG_LOG("Memory mapping weights from ", this->filepath);
+	int fd = open(this->filepath.c_str(), O_RDONLY);
+	struct stat st;
+    if (fstat(fd, &st) != 0) {
+        close(fd);
+        throw std::runtime_error("fstat failed");
+    }
+    this->buf_size = static_cast<size_t>(st.st_size);
+	this->mmap_ptr = static_cast<uint8_t*>(mmap(NULL, this->buf_size, PROT_READ, MAP_PRIVATE, fd, 0));
+	if (this->mmap_ptr == MAP_FAILED) {
+		throw std::runtime_error("mmap failed");
+	}
 }
 
 void WeightLoader::load_fully_resident() {
@@ -61,8 +90,59 @@ void WeightLoader::load_fully_resident() {
     DEBUG_LOG("Successfully loaded weights totaling ", total, " bytes.");
 }
 
+
+void WeightLoader::load_fully_resident_chunked(const size_t CHUNK) {
+    DEBUG_LOG("Loading weights from ", filepath);
+
+    int fd = open(filepath.c_str(), O_RDONLY);
+    if (fd == -1) {
+        throw std::runtime_error(std::string("open failed: ") + std::strerror(errno));
+    }
+
+    struct stat st;
+    if (fstat(fd, &st) != 0) {
+        close(fd);
+        throw std::runtime_error(std::string("fstat failed: ") + std::strerror(errno));
+    }
+
+    buf_size = static_cast<size_t>(st.st_size);
+    buffer = std::make_unique<uint8_t[]>(buf_size);
+
+    size_t total = 0;
+    while (total < buf_size) {
+        size_t remaining = buf_size - total;
+        size_t to_read = std::min(remaining, CHUNK);
+
+        ssize_t n = read(fd, buffer.get() + total, to_read);
+        if (n == 0) break; // EOF early
+        if (n < 0) {
+            if (errno == EINTR) continue;
+            int e = errno;
+            close(fd);
+            throw std::runtime_error(std::string("read failed: ") + std::strerror(e));
+        }
+        total += static_cast<size_t>(n);
+    }
+
+    close(fd);
+
+    if (total != buf_size) {
+        throw std::runtime_error("short read: expected " + std::to_string(buf_size) +
+                                 " got " + std::to_string(total));
+    }
+
+    DEBUG_LOG("Successfully loaded ", total, " bytes.");
+}
+
 std::unordered_map<std::string, TensorInfo> WeightLoader::get_tensor_index() {
 	return this->tensor_index;
+}
+
+void WeightLoader::mmap_load_tensor_into_memory(const uint8_t* offset, size_t n_bytes) {
+	volatile int x = 0;
+	for (int i = 0; i < n_bytes; i += this->PAGE_SIZE) {
+		x += offset[i];
+	}
 }
 
 std::optional<TensorView> WeightLoader::fetch_tensor(std::string_view tensor_name) {
@@ -74,7 +154,7 @@ std::optional<TensorView> WeightLoader::fetch_tensor(std::string_view tensor_nam
 	const TensorInfo& info = it->second;
 	TensorView t;
 	t.name = info.name;
-	t.data = this->buffer.get() + info.offset;
+	t.data = this->base_ptr() + info.offset;
 	size_t num_elements = 1; 
 	for (int i = 0; i < info.n_dim; i++) {
 		num_elements *= info.dim[i];
@@ -100,23 +180,24 @@ std::optional<TensorView> WeightLoader::fetch_tensor(std::string_view tensor_nam
 		case TensorType::GGML_TYPE_Q4_1:
 			break;
 		default:
-			throw std::invalid_argument("unsupported tensor type");
+			throw std::invalid_argument("unsupported tensor type: " + std::to_string(t.type));
 	}
 	t.dim = std::span<const uint64_t>(info.dim.data(), info.dim.size());
+
 	return t;
 }
 
 
 bool WeightLoader::parse_magic_number() {
-	return this->buffer[0] == 0x47 && this->buffer[1] == 0x47 &&
-		   this->buffer[2] == 0x55 && this->buffer[3] == 0x46;
+	return this->base_ptr()[0] == 0x47 && this->base_ptr()[1] == 0x47 &&
+		   this->base_ptr()[2] == 0x55 && this->base_ptr()[3] == 0x46;
 }
 
 int WeightLoader::parse_gguf_version() {
 	std::cout << "Parse gguf version:";
 	uint32_t gguf_version = 0;
 	for (int i = 0; i < 4; i++) {
-		gguf_version += this->buffer[4 + i] << (8 * i);
+		gguf_version += this->base_ptr()[4 + i] << (8 * i);
 	}
 	return gguf_version;
 }
@@ -199,7 +280,7 @@ uint64_t WeightLoader::peek_u64_little_endian(size_t index) {
 	}
 	uint64_t result = 0;
 	for (int i = 0; i < 8; i++) {
-		result += uint64_t(this->buffer[index + i]) << (8 * i);
+		result += uint64_t(this->base_ptr()[index + i]) << (8 * i);
 	}
 	return result;
 }
@@ -210,16 +291,16 @@ uint32_t WeightLoader::peek_u32_little_endian(size_t index) {
 	}
 	uint32_t result = 0;
 	for (int i = 0; i < 4; i++) {
-		result += uint32_t(this->buffer[index + i]) << (8 * i);
+		result += uint32_t(this->base_ptr()[index + i]) << (8 * i);
 	}
 	return result;
 }
 
 bool WeightLoader::consume_bool(size_t& cursor) {
-	if (this->buffer[cursor] == 0) {
+	if (this->base_ptr()[cursor] == 0) {
 		cursor++;
 		return false;
-	} else if (this->buffer[cursor] == 1) {
+	} else if (this->base_ptr()[cursor] == 1) {
 		cursor++;
 		return true;
 	}
@@ -252,7 +333,7 @@ std::string WeightLoader::consume_str(size_t& cursor, size_t size) {
     if (cursor + size > buf_size) {
         throw std::invalid_argument("trying to read beyond buffer size!");
     }
-    const char* p = reinterpret_cast<const char*>(buffer.get() + cursor);
+    const char* p = reinterpret_cast<const char*>(this->base_ptr() + cursor);
     std::string result(p, p + size);   
     cursor += size;
     return result;

@@ -14,8 +14,9 @@
 #include <stdexcept>
 #include <span>
 #include <optional>
+#include <sys/mman.h>
+#include <unistd.h>
 
-#define CHUNK 16777216
 
 typedef struct {
 	int num_tensors;
@@ -144,13 +145,21 @@ using MetadataValue = struct MetadataValue;
 
 class WeightLoader {
   private:
+	bool fully_resident;
 	std::unique_ptr<uint8_t[]> buffer;
+	uint8_t* mmap_ptr;
 	const std::string filepath;	
-	int buf_size;
+	size_t buf_size;
+	const size_t PAGE_SIZE = static_cast<size_t>(sysconf(_SC_PAGESIZE));
+ 
 	// TODO: Turn metadata and tensor_info into zero-copy structs?
 	std::unordered_map<std::string, MetadataValue> metadata;
 	// std::vector<TensorInfo> tensor_info;
 	std::unordered_map<std::string, TensorInfo> tensor_index; // name --> offset
+
+	uint8_t* base_ptr() {
+		return fully_resident ? buffer.get() : mmap_ptr; 
+	}
 
 	// Parse specific parts of the gguf file
 	bool parse_magic_number();
@@ -178,11 +187,22 @@ class WeightLoader {
 	
 	// If the GPU has enough VRAM, load all tensors
 	void load_fully_resident();
-	// Otherwise, stream them to GPU
-	bool stream_to_gpu();
+	void load_fully_resident_chunked(const size_t CHUNK=64ull * 1024 * 1024);
+	// Otherwise, stream them from disk through memory to GPU
+	void load_mmap();
   public:
-	WeightLoader(const std::string &filepath);
+	WeightLoader(const std::string &, bool);
+	~WeightLoader();
 	Metadata get_metadata();
 	std::unordered_map<std::string, TensorInfo> get_tensor_index();
 	std::optional<TensorView> fetch_tensor(std::string_view tensor_name);
+	void mmap_load_tensor_into_memory(const uint8_t*, size_t);
+};
+
+// To convert pointer from mmap to unique_ptr
+struct MMapDeleter {
+    size_t size;
+    void operator()(uint8_t* p) const {
+        if (p) munmap(p, size);
+    }
 };

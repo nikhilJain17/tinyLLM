@@ -30,4 +30,5 @@ cd build && cmake --build . --target clean && cmake --build .
 
 ## Run perf microbenchmarks
 cmake --build build --target run_tokenizer_bench  
+cmake --build build --target run_weight_loader_bench
 

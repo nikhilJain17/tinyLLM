@@ -152,3 +152,4 @@ endfunction()
 
 # Add your tokenizer benchmark
 add_tinyllm_bench(tokenizer_bench)
+add_tinyllm_bench(weight_loader_bench)

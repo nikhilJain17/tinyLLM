@@ -143,9 +143,10 @@ struct MetadataValue {
 
 
 enum class Mode {
-    FullyResidentOneShot,
+    FullyResidentOneShot = 0,
     ChunkedFullyResident,
-    MemoryMapped
+    MemoryMapped,
+    COUNT
 };
 
 struct ReadError : public std::runtime_error {

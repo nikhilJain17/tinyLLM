@@ -141,6 +141,19 @@ struct MetadataValue {
 	MetadataPayload payload;
 };
 
+
+enum class Mode {
+    FullyResidentOneShot,
+    ChunkedFullyResident,
+    MemoryMapped
+};
+
+struct ReadError : public std::runtime_error {
+    using std::runtime_error::runtime_error;
+};
+
+std::ostream& operator<<(std::ostream& out, const Mode& m) ;
+
 using MetadataValue = struct MetadataValue;
 
 class WeightLoader {
@@ -191,7 +204,7 @@ class WeightLoader {
 	// Otherwise, stream them from disk through memory to GPU
 	void load_mmap();
   public:
-	WeightLoader(const std::string &, bool);
+	WeightLoader(const std::string &, Mode);
 	~WeightLoader();
 	Metadata get_metadata();
 	std::unordered_map<std::string, TensorInfo> get_tensor_index();

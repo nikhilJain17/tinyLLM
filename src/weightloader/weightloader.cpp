@@ -1,12 +1,36 @@
 #include "weightloader.hpp"
-WeightLoader::WeightLoader(const std::string &filepath, bool fully_resident) : filepath(filepath) {
-	this->fully_resident = fully_resident;
-	if (fully_resident) {
+
+std::ostream& operator<<(std::ostream& out, const Mode& m) {
+    if (m == Mode::FullyResidentOneShot) {
+        out << "FullyResidentOneShot";
+    } else if (m == Mode::ChunkedFullyResident) {
+        out << "ChunkedFullyResident";
+    } else if (m == Mode::MemoryMapped) {
+        out << "MemoryMapped";
+    }
+    return out;
+}
+
+WeightLoader::WeightLoader(const std::string &filepath, Mode mode) : filepath(filepath) {
+	this->fully_resident = (mode == Mode::FullyResidentOneShot 
+		|| mode == Mode::ChunkedFullyResident);
+	if (!fully_resident) {
+		this->load_mmap();
+	} else {
+		// Try fully resident one shot if requested
+		// Otherwise, load in chunked
+		if (mode == Mode::FullyResidentOneShot) {
+			try {
+				this->load_fully_resident();
+			} catch (const ReadError& e) {
+				DEBUG_LOG("Could not load fully resident one shot, falling back to fully resident chunked.");
+				this->load_fully_resident_chunked();
+			}
+		} else {
+			this->load_fully_resident_chunked();
+		}
 		// TODO: find out threshold for loading chunked
 		// this->load_fully_resident();
-		this->load_fully_resident_chunked();
-	} else {
-		this->load_mmap();
 	}
 
 	DEBUG_LOG("Magic number is ",
@@ -27,7 +51,6 @@ WeightLoader::WeightLoader(const std::string &filepath, bool fully_resident) : f
 }
 
 WeightLoader::~WeightLoader() {
-	// TODO: munmap or free unique ptr
 	if (!fully_resident) {
 		munmap(this->mmap_ptr, this->buf_size);
 	}
@@ -73,7 +96,7 @@ void WeightLoader::load_fully_resident() {
         if (n < 0) {
             if (errno == EINTR) continue; // interrupted, retry
             close(fd);
-            throw std::runtime_error("read failed");
+            throw ReadError("read failed");
         }
 
         total += static_cast<size_t>(n);

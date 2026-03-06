@@ -11,7 +11,7 @@ std::ostream& operator<<(std::ostream& out, const Mode& m) {
     return out;
 }
 
-WeightLoader::WeightLoader(const std::string &filepath, Mode mode) : filepath(filepath) {
+WeightLoader::WeightLoader(const std::string &filepath, Mode mode=Mode::MemoryMapped) : filepath(filepath) {
 	this->fully_resident = (mode == Mode::FullyResidentOneShot 
 		|| mode == Mode::ChunkedFullyResident);
 	if (!fully_resident) {
@@ -23,8 +23,9 @@ WeightLoader::WeightLoader(const std::string &filepath, Mode mode) : filepath(fi
 			try {
 				this->load_fully_resident();
 			} catch (const ReadError& e) {
-				DEBUG_LOG("Could not load fully resident one shot, falling back to fully resident chunked.");
-				this->load_fully_resident_chunked();
+				throw e;
+				// DEBUG_LOG("Could not load fully resident one shot, falling back to fully resident chunked.");
+				// this->load_fully_resident_chunked();
 			}
 		} else {
 			this->load_fully_resident_chunked();

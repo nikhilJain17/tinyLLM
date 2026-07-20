@@ -1,6 +1,22 @@
 #include "tokenizer/greedy_tokenizer.hpp"
 #include "tokenizer/hashmap_tokenizer.hpp"
 #include <gtest/gtest.h>
+#include <memory>
+
+// Golden ids below are from HuggingFace tokenizers on
+// unsloth/Llama-3.2-1B-Instruct (add_special_tokens=False).
+class LlamaTokenizerTest : public ::testing::Test {
+  protected:
+	static std::unique_ptr<HashMapTokenizer> tok;
+	static void SetUpTestSuite() {
+		if (!tok) {
+			tok = std::make_unique<HashMapTokenizer>(
+				"resources/llama_tokens.txt", "resources/llama_merges.txt");
+		}
+	}
+	static void TearDownTestSuite() { tok.reset(); }
+};
+std::unique_ptr<HashMapTokenizer> LlamaTokenizerTest::tok = nullptr;
 
 // TODO: make these tests modular for swapping cl100k and o200k
 TEST(TokenizerTest, StringOnly) {
@@ -96,4 +112,66 @@ TEST(TokenizerTest, LongTest1) {
 		843,   13};
 	EXPECT_EQ(expected.size(), actual.size());
 	EXPECT_EQ(expected, actual);
+}
+
+TEST_F(LlamaTokenizerTest, HelloWorld) {
+	std::vector<int> expected{9906, 1917};
+	EXPECT_EQ(expected, tok->tokenize("Hello world"));
+}
+
+TEST_F(LlamaTokenizerTest, SimpleSentence) {
+	std::vector<int> expected{791, 4062, 14198, 39935, 35308, 927, 279, 16053, 5679};
+	EXPECT_EQ(expected, tok->tokenize("The quick brown fox jumps over the lazy dog"));
+}
+
+TEST_F(LlamaTokenizerTest, Prose) {
+	std::vector<int> expected{8100, 15203, 14297, 3235, 279, 11594, 31284, 520, 39493};
+	EXPECT_EQ(expected, tok->tokenize("She walked slowly along the quiet shore at dawn"));
+}
+
+TEST_F(LlamaTokenizerTest, Contraction) {
+	std::vector<int> expected{40, 649, 956, 4510, 433, 596, 2736, 2884};
+	EXPECT_EQ(expected, tok->tokenize("I can't believe it's already done"));
+}
+
+TEST_F(LlamaTokenizerTest, Multilingual) {
+	std::vector<int> expected{78850, 59761, 1555, 21097, 689, 323, 15212, 11, 36330, 57233};
+	EXPECT_EQ(expected,
+			  tok->tokenize("Alexander marched through Persia and Egypt, founding Alexandria"));
+}
+
+TEST_F(LlamaTokenizerTest, PunctuationAndSmallNumbers) {
+	std::vector<int> expected{880,	 716, 2859, 482, 20, 311, 220, 1774, 11, 42338,
+							  220,	 18,  25,	16,	 11, 88646, 1198, 323, 18210};
+	EXPECT_EQ(expected,
+			  tok->tokenize("temperatures -5 to 45, ratios 3:1, dashes -- and symbols"));
+}
+
+// DISABLED until the pre-tokenization regex is implemented.
+//
+// The real Llama 3 tokenizer runs a regex (the cl100k/GPT-4 pattern) over the
+// text BEFORE BPE, splitting it into chunks; merges are then only allowed
+// within a chunk, never across chunk boundaries. Our tokenize() skips that step
+// and feeds the whole string to BPE, so merges that the regex would have
+// forbidden still fire.
+//
+// The gap shows up on:
+//   - Multi-digit numbers: the pattern `\p{N}{1,3}` caps digit runs at 3, so
+//     "2024" -> "202" + "4" (2366, 19). Without it, raw BPE merges the four
+//     digits differently (508, 1187). Same for "14159" and the "4567" below.
+//   - Punctuation runs butting against digits (the phone number).
+//
+// The expected ids here are the correct HF/Llama-3.2 golden values; these tests
+// flip to enabled once the pre-tokenizer lands. See Meta's models/llama3/
+// tokenizer.py (pat_str) and OpenAI tiktoken's cl100k_base pattern.
+TEST_F(LlamaTokenizerTest, DISABLED_MultiDigitNumbers) {
+	std::vector<int> expected{791, 1060, 374, 220, 2366, 19, 323,
+							  9115, 374, 220, 18, 13, 9335, 2946};
+	EXPECT_EQ(expected, tok->tokenize("The year is 2024 and pi is 3.14159"));
+}
+
+TEST_F(LlamaTokenizerTest, DISABLED_SpecialChars) {
+	std::vector<int> expected{2386, 757, 48427, 916, 477, 1650, 489, 16, 12, 14148,
+							  12, 4513, 12, 10961, 22, 758, 31, 49177, 46999, 5, 9};
+	EXPECT_EQ(expected, tok->tokenize("email me@test.com or call +1-555-123-4567 !@#$%^&*"));
 }

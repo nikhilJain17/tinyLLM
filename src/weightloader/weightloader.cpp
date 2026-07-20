@@ -1,5 +1,7 @@
 #include "weightloader.hpp"
 
+#include "../tokenizer/base64.hpp"
+
 std::ostream& operator<<(std::ostream& out, const Mode& m) {
     if (m == Mode::FullyResidentOneShot) {
         out << "FullyResidentOneShot";
@@ -55,6 +57,60 @@ WeightLoader::~WeightLoader() {
 	if (!fully_resident) {
 		munmap(this->mmap_ptr, this->buf_size);
 	}
+}
+
+void WeightLoader::write_token_vocab_to_file(std::string filepath) {
+	// GGUF stores the vocab as a string array; the token id is the array index.
+	const MetadataValue& tokens_mv = this->metadata.at("tokenizer.ggml.tokens");
+	if (tokens_mv.type != MetadataType::array) {
+		throw std::invalid_argument("tokenizer.ggml.tokens is not an array");
+	}
+	const auto& tokens = std::get<std::vector<MetadataValue>>(tokens_mv.payload);
+
+	// Dump as "<base64_token> <id>" per line, the format the tokenizers expect.
+	std::ofstream ofs(filepath, std::ios::binary | std::ios::trunc);
+	if (!ofs) {
+		throw std::runtime_error("Failed to open token vocab file: " + filepath);
+	}
+
+	for (size_t id = 0; id < tokens.size(); id++) {
+		const std::string& token = std::get<std::string>(tokens[id].payload);
+		ofs << base64::encode(token) << ' ' << id << '\n';
+	}
+
+	if (!ofs) {
+		throw std::runtime_error("Failed writing token vocab file: " + filepath);
+	}
+
+	DEBUG_LOG("Wrote ", tokens.size(), " tokens to ", filepath);
+}
+
+void WeightLoader::write_token_merges_to_file(std::string filepath) {
+	// GPT2-style BPE merge rules, with merge array instead of score array.
+	// Merge rank is the array index.
+	auto it = this->metadata.find("tokenizer.ggml.merges");
+	if (it == this->metadata.end()) {
+		throw std::runtime_error("tokenizer.ggml.merges not found");
+	}
+	if (it->second.type != MetadataType::array) {
+		throw std::invalid_argument("tokenizer.ggml.merges is not an array");
+	}
+	const auto& merges = std::get<std::vector<MetadataValue>>(it->second.payload);
+
+	std::ofstream ofs(filepath, std::ios::binary | std::ios::trunc);
+	if (!ofs) {
+		throw std::runtime_error("Failed to open merges file: " + filepath);
+	}
+
+	for (const auto& mv : merges) {
+		ofs << std::get<std::string>(mv.payload) << '\n';
+	}
+
+	if (!ofs) {
+		throw std::runtime_error("Failed writing merges file: " + filepath);
+	}
+
+	DEBUG_LOG("Wrote ", merges.size(), " merges to ", filepath);
 }
 
 void WeightLoader::load_mmap() {

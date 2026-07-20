@@ -208,6 +208,8 @@ class WeightLoader {
 	WeightLoader(const std::string &, Mode);
 	~WeightLoader();
 	Metadata get_metadata();
+    void write_token_vocab_to_file(std::string filepath);
+    void write_token_merges_to_file(std::string filepath);
 	std::unordered_map<std::string, TensorInfo> get_tensor_index();
 	std::optional<TensorView> fetch_tensor(std::string_view tensor_name);
 	void mmap_load_tensor_into_memory(const uint8_t*, size_t);
